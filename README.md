@@ -4,8 +4,6 @@ Thesis: Lightweight Device Authentication in Wireless Communication Using RF Fin
 University: Kristianstad University (HKR), DT339G VT26, Computer Engineering
 Supervisors: Prof. Qinghua Wang. Examiner: Ali
 
----
-
 ## What this experiment is
 
 This is a preliminary experiment, a proof-of-concept run before the main thesis data collection. We had two USRP B200 software-defined radios and one question: can a small neural network tell them apart just from the radio signal they produce?
@@ -17,11 +15,7 @@ We recorded data in two configurations:
 | Baseline | Serial 3288FAD | Serial 3288FF2 | Class 0 |
 | Swapped | Serial 3288FF2 | Serial 3288FAD | Class 1 |
 
-We then trained a lightweight 1D-CNN on those recordings and analysed what it learned.
-
-The short answer is that we got 100% accuracy at all noise levels. More importantly, we found out exactly why, and it changes how we design the real thesis experiment.
-
----
+We then trained a lightweight 1D-CNN on those recordings and analysed what it learned. We got 100% accuracy at all noise levels. More importantly, we found out exactly why, and it changes how we design the real thesis experiment.
 
 ## Quick results
 
@@ -34,8 +28,6 @@ The short answer is that we got 100% accuracy at all noise levels. More importan
 | CNN total parameters | 52,258 |
 | Primary fingerprint feature | Carrier Frequency Offset (CFO) |
 | CFO separation between devices | 1,161 Hz (std dev: 0.67 Hz) |
-
----
 
 ## Contents
 
@@ -50,16 +42,14 @@ The short answer is that we got 100% accuracy at all noise levels. More importan
 - [Key Findings](#key-findings)
 - [Thesis Implications](#thesis-implications)
 
----
-
 ## Hardware setup
 
 Both radios are USRP B200 devices, physically identical units from the same manufacturer. They were placed 1 metre apart in a normal indoor environment, transmitting over-the-air with no cables.
 
 ```
-[USRP B200 -- TX]  )))  ~~~  (((  [USRP B200 -- RX]
-      0 dB TX gain       1 metre        30 dB RX gain
-      10 kHz CW tone     OTA            1 MHz sample rate
+[USRP B200 TX]  ---air---  [USRP B200 RX]
+  0 dB TX gain   1 metre    30 dB RX gain
+  10 kHz CW tone  OTA       1 MHz sample rate
 ```
 
 | Parameter | Value | Reason |
@@ -79,39 +69,31 @@ Both radios are USRP B200 devices, physically identical units from the same manu
 | `tx1_new.dat` | 3288FAD | 62,988,680 | 61,512 |
 | `tx1_Swap_new.dat` | 3288FF2 | 63,592,520 | 62,102 |
 
-Important limitation: in this experiment both TX and RX changed between classes. The CNN therefore learned the combined fingerprint of the full TX+RX hardware pair. The definitive thesis experiment uses a fixed receiver so only the transmitter changes.
-
----
+One important limitation to note: in this experiment both TX and RX changed between classes. The CNN therefore learned the combined fingerprint of the full TX+RX hardware pair. The definitive thesis experiment uses a fixed receiver so only the transmitter changes.
 
 ## Data pipeline
 
 ```
 Raw .dat file
      |
-     v
-[1] Drop first 1,000,000 samples  <- removes hardware power-on transient
+     |  Drop first 1,000,000 samples  (removes hardware power-on transient)
      |
-     v
-[2] Normalise: divide by max(|IQ|)  <- NO mean subtraction (DC offset preserved)
+     |  Normalise: divide by max(|IQ|)  (no mean subtraction, DC offset preserved)
      |
-     v
-[3] Reshape into (N x 1024 x 2) segments  <- I and Q as separate channels
+     |  Reshape into (N x 1024 x 2) segments  (I and Q as separate channels)
      |
-     v
-[4] Add AWGN noise at 20 / 10 / 0 dB SNR  <- robustness testing
+     |  Add AWGN noise at 20 / 10 / 0 dB SNR  (robustness testing)
      |
-     v
-[5] Label: Class 0 or Class 1  <- combine both devices
+     |  Label: Class 0 or Class 1  (combine both devices)
      |
-     v
-[6] Temporal holdout split: train on t < 70%, test on t > 70%
+     |  Temporal holdout split: train on t < 70%, test on t > 70%
 ```
 
 ### Why we keep the DC offset
 
-A common preprocessing step is subtracting the mean from IQ data to remove DC offset. We deliberately skip this. The DC offset comes from the radio's Local Oscillator (LO) leaking into the received signal, a hardware impairment unique to each radio. Removing it would destroy a potential fingerprint.
+A common preprocessing step is subtracting the mean from IQ data to remove DC offset. We deliberately skip this. The DC offset comes from the radio's Local Oscillator (LO) leaking into the received signal, and it is a hardware impairment unique to each radio. Removing it would destroy a potential fingerprint.
 
-Note: in this particular experiment, DC offset turned out to be identical between devices. But the preprocessing decision remains correct for the general case.
+In this particular experiment, DC offset turned out to be identical between devices. But the preprocessing decision remains correct for the general case.
 
 ### AWGN verification
 
@@ -124,8 +106,6 @@ We verified that our artificially added noise was stronger than the real room no
 
 30 dB SNR was excluded because the swap device's ambient noise exceeded the target noise power at that level.
 
----
-
 ## IQ signal visualisations
 
 ### 1. Time-domain IQ signal
@@ -134,29 +114,23 @@ Each radio transmits a 10 kHz cosine wave. The I channel (blue) and Q channel (r
 
 ![IQ Time Domain](images/01_iq_time_domain.png)
 
-What to look for: the frequency of the oscillation in each plot. Device 3288FAD completes its cycles slightly slower (9,418 Hz) while 3288FF2 runs faster (10,580 Hz). This is the CFO fingerprint visible directly in the time domain.
-
----
+The key thing to notice is the frequency of the oscillation in each plot. Device 3288FAD completes its cycles slightly slower at 9,418 Hz, while 3288FF2 runs faster at 10,580 Hz. This is the CFO fingerprint visible directly in the time domain.
 
 ### 2. Constellation diagrams
 
-A constellation diagram plots I (horizontal) vs Q (vertical) for every sample. For a perfect CW signal this would be a perfect circle. Real hardware impairments make the circle imperfect.
+A constellation diagram plots I (horizontal) vs Q (vertical) for every sample. For a perfect CW signal this would be a perfect circle. Real hardware impairments distort it.
 
 ![Constellation](images/02_constellation.png)
 
-What to look for: the red star marks the DC centre of each device's signal. The radius of the circle corresponds to signal amplitude. Both devices show a circular pattern (expected for CW), but at slightly different radii and with different noise spread.
-
----
+The red star marks the DC centre of each device's signal. The radius of the circle corresponds to signal amplitude. Both devices show a circular pattern as expected for CW, but at slightly different radii and with different noise spread.
 
 ### 3. Power Spectral Density (PSD)
 
-The PSD shows how signal power is distributed across frequencies. For a CW signal there should be one sharp spike at the tone frequency. The position of that spike is the CFO fingerprint.
+The PSD shows how signal power is distributed across frequencies. For a CW signal there should be one sharp spike at the tone frequency, and the position of that spike is the CFO fingerprint.
 
 ![PSD](images/03_psd.png)
 
-What to look for: the red dashed line marks where each device's tone actually appears. Device 3288FAD's tone is at 9,418 Hz; Device 3288FF2's is at 10,580 Hz. The grey dotted line shows the nominal 10,000 Hz. Both devices are offset from nominal, in opposite directions.
-
----
+The red dashed line marks where each device's tone actually appears. Device 3288FAD's tone lands at 9,418 Hz; Device 3288FF2's lands at 10,580 Hz. The grey dotted line shows the nominal 10,000 Hz target. Both devices are offset from nominal, in opposite directions.
 
 ## CNN architecture
 
@@ -184,12 +158,7 @@ Input: (1024 samples x 2 channels)
            Output: probability for Class 0 and Class 1
 ```
 
-Key design choices:
-
-- AveragePooling (not MaxPooling): preserves subtle phase and timing features rather than picking only the highest-amplitude moments.
-- GlobalAveragePooling1D (not Flatten): reduces the parameter count from ~4 million to ~52K by averaging across the time dimension.
-- Adam, lr=0.0001: small learning rate for the subtle RF feature landscape.
-- Early stopping (patience=5): all three models stopped before the 20-epoch maximum.
+A few design decisions are worth explaining. We used AveragePooling rather than MaxPooling because MaxPooling only keeps the highest-amplitude feature in each window, which is fine for images but misses the subtle phase and timing patterns that matter in RF signals. We used GlobalAveragePooling1D rather than Flatten because flattening after three conv layers would give roughly 4 million parameters in one connection alone; the global average brings that down to around 16K. The learning rate is 0.0001, which is deliberately slow — RF fingerprints are subtle, and a larger rate causes the optimiser to overshoot the narrow loss regions where these features live.
 
 ### Training convergence
 
@@ -198,8 +167,6 @@ Key design choices:
 | 20 dB | 5 epochs | Cleanest signal, fastest learning |
 | 10 dB | 5 epochs | Moderate noise, equally fast |
 | 0 dB | 9 epochs | Noise equals signal power, needs slightly more time |
-
----
 
 ## Results
 
@@ -217,7 +184,7 @@ A standard random 80/20 split might accidentally put very similar signal chunks 
 
 ### Confusion matrices (all SNR levels)
 
-All three confusion matrices are identical, no errors anywhere:
+All three confusion matrices are identical with no errors:
 
 ```
               Predicted Class 0    Predicted Class 1
@@ -225,27 +192,23 @@ True Class 0      100.00%               0.00%
 True Class 1        0.00%             100.00%
 ```
 
----
-
 ## Phase analysis: what did the CNN learn?
 
-After seeing 100% accuracy, we ran four follow-up analyses to find out what hardware feature the CNN exploited.
+After seeing 100% accuracy, we ran four follow-up analyses to find out which hardware feature the CNN was actually using.
 
 ### Phase analysis plots
 
 ![Phase Analysis](images/04_phase_analysis.png)
 
-Left panel: phase distribution at sample 0 of each segment. Both devices show similar uniform distributions, confirming the phase at any individual sample is not itself the fingerprint.
+The left panel shows the phase distribution at sample 0 of each segment. Both devices show similar uniform distributions, confirming that the phase at any individual sample is not the fingerprint.
 
-Middle panel: phase value at segment start over 200 segments. The values scatter randomly for both devices, as expected for a CW signal whose segments start at arbitrary phase offsets.
+The middle panel shows the phase value at segment start over 200 segments. The values scatter randomly for both devices, as you would expect for a CW signal whose segments start at arbitrary phase offsets.
 
-Right panel: unwrapped phase within one segment, with a linear fit. The slope of this line is the CFO. Device 3288FAD's phase rotates at a rate corresponding to 9,418 Hz; Device 3288FF2 rotates at 10,580 Hz. The slopes are visibly and measurably different.
-
----
+The right panel shows the unwrapped phase within one segment, with a linear fit. The slope of that line is the CFO. Device 3288FAD's phase rotates at a rate corresponding to 9,418 Hz; Device 3288FF2 rotates at 10,580 Hz. The slopes are visibly and measurably different.
 
 ### CFO stability across segments
 
-We measured the CFO independently in 200 separate segments. The result is extraordinarily consistent:
+We measured the CFO independently in 200 separate segments:
 
 ![CFO Stability](images/05_cfo_stability.png)
 
@@ -255,9 +218,7 @@ We measured the CFO independently in 200 separate segments. The result is extrao
 | 3288FF2 | 10,579.97 Hz | 0.67 Hz | Rock solid |
 | Separation | 1,161.47 Hz | -- | Primary fingerprint |
 
-The standard deviation of 0.67 Hz means the CNN can rely on this feature being consistent across the entire recording, across different time windows, and between training and test sets.
-
----
+The 0.67 Hz standard deviation means the CNN can rely on this feature being consistent across the entire recording, across different time windows, and between training and test sets.
 
 ## Feature summary
 
@@ -274,7 +235,7 @@ The standard deviation of 0.67 Hz means the CNN can rely on this feature being c
 
 ### The CFO fingerprint explained
 
-Every radio has a crystal oscillator that controls its operating frequency. No crystal is perfect. Each one has a small manufacturing-specific error that shifts the transmitted signal to a slightly different frequency. This shift is called the Carrier Frequency Offset (CFO).
+Every radio has a crystal oscillator that controls its operating frequency. No crystal is perfect — each one has a small manufacturing-specific error that shifts the transmitted signal slightly away from the intended frequency. This shift is called the Carrier Frequency Offset (CFO).
 
 ```
 Nominal CW tone:          10,000 Hz
@@ -289,57 +250,49 @@ Nominal CW tone:          10,000 Hz
                          Delta = 1,161 Hz
 ```
 
-The CNN answers the question: is the tone closer to 9,418 Hz or 10,580 Hz? It can determine this from just a few samples at the start of each segment, which is confirmed by saliency maps that peak at samples 1 through 4 of 1,024.
+The CNN is essentially asking: is this tone closer to 9,418 Hz or 10,580 Hz? It can answer that from just the first few samples of each segment, which matches what the saliency maps show — they peak at samples 1 through 4 of 1,024.
 
-Note on this experiment's limitation: the 1,161 Hz separation is the combined oscillator error of both TX and RX hardware pairs. In the real thesis experiment with a fixed receiver, only the TX oscillator changes between classes. The separation will be smaller, perhaps 50 to 200 Hz, making the problem harder and more scientifically rigorous.
-
----
+One important caveat: the 1,161 Hz separation here reflects the combined oscillator error of both TX and RX hardware pairs, because both changed between classes. In the real thesis experiment with a fixed receiver, only the TX oscillator changes. The separation will likely be smaller, perhaps 50 to 200 Hz, which makes the classification harder and the result more scientifically meaningful.
 
 ## Signal at 0 dB SNR
 
-At 0 dB SNR, the injected noise power equals the signal power. The signal is barely visible to the eye. The CNN still classifies correctly 100% of the time.
+At 0 dB SNR the injected noise power equals the signal power. The signal is barely visible to the eye, yet the CNN still classifies correctly 100% of the time.
 
 ![Noisy IQ at 0 dB](images/08_noisy_iq.png)
 
-Why this matters: in a real-world deployment, a 0 dB SNR corresponds to a very poor radio link, whether from low transmission power, long range, or heavy interference. The fact that the CFO fingerprint survives this level of noise degradation suggests it will remain useful in challenging deployment conditions.
-
----
+In a real deployment, 0 dB SNR corresponds to a very poor radio link — low power, long range, or heavy interference. The fact that the CFO fingerprint survives this level of degradation is encouraging for how the approach might hold up in practice.
 
 ### Amplitude characterisation
 
 ![Amplitude](images/06_amplitude.png)
 
-Left: amplitude distribution. Device 3288FF2 has a slightly higher mean amplitude (0.837 vs 0.802), which could contribute as a secondary fingerprint but is a much weaker discriminator than CFO.
+The left panel shows the amplitude distribution. Device 3288FF2 has a slightly higher mean amplitude (0.837 vs 0.802), which could act as a weak secondary fingerprint but is nowhere near as reliable as CFO.
 
-Middle: mean envelope shape. Both devices show a flat envelope (as expected for CW) with similar variance, confirming the signal is well-behaved between recordings.
+The middle panel shows the mean envelope shape. Both devices produce a flat envelope, as expected for CW, with similar variance between recordings.
 
-Right: effect of noise on one segment. Shows how the I channel degrades from 20 dB to 10 dB to 0 dB SNR. Even at 0 dB the underlying tone frequency is preserved, which is why the CNN can still extract the CFO fingerprint.
-
----
+The right panel shows the effect of noise on a single segment, illustrating how the I channel degrades from 20 dB down to 0 dB SNR. Even at 0 dB the underlying tone frequency is preserved, which is why the CNN can still extract the CFO fingerprint under those conditions.
 
 ## Key findings
 
 ### CFO is a genuine, stable hardware fingerprint
 
-The 1,161 Hz separation is consistent to within 0.67 Hz across the entire recording. It survives all three noise levels including 0 dB SNR. The CNN needed only 5 to 9 epochs to learn it. This is a real, physical, hardware-level impairment, not a dataset artifact.
+The 1,161 Hz separation holds to within 0.67 Hz across the entire recording and survives all three noise levels including 0 dB SNR. The CNN needed only 5 to 9 epochs to learn it. This is a real, physical, hardware-level impairment, not a statistical artefact of the dataset.
 
 ### DC offset was not the fingerprint in this experiment
 
-Both devices had identical DC offsets (difference = 0.000001). This directly contradicts a common assumption in RF fingerprinting papers. The preprocessing decision to preserve DC offset remains correct for the general case, but this experiment alone cannot validate it as a discriminating feature.
+Both devices had identical DC offsets, with a difference of just 0.000001. This runs counter to a common assumption in RF fingerprinting papers. The decision to preserve DC offset in preprocessing is still correct as a general rule, but this experiment cannot validate it as a discriminating feature on its own.
 
-### Temporal accuracy equals random split accuracy
+### Temporal accuracy matches random split accuracy
 
-There is zero performance gap between random and temporal train/test splits across all three SNR levels. The fingerprint is time-invariant within a session. The CNN generalises to unseen time windows, not just unseen shuffled segments.
+There is no performance gap between random and temporal train/test splits at any of the three SNR levels. The fingerprint is time-invariant within a session, meaning the CNN generalises to unseen time windows, not just to shuffled segments it has seen nearby samples of.
 
-### Lightweight CNN architecture validated
+### The lightweight CNN architecture works
 
-52,258 parameters, AveragePooling1D, GlobalAveragePooling1D. The model converges cleanly in under 10 epochs. The architecture is confirmed for use in the thesis experiment.
+52,258 parameters, AveragePooling1D, GlobalAveragePooling1D. The model converges cleanly in under 10 epochs and is confirmed for use in the main thesis experiment.
 
 ### Both TX and RX changed between classes
 
-This is the key experimental limitation. The results reflect combined TX+RX hardware fingerprints, not transmitter-only fingerprints. The definitive experiment isolates the transmitter by keeping the receiver fixed.
-
----
+This is the key experimental limitation. The results reflect combined TX+RX hardware fingerprints, not transmitter-only fingerprints. The definitive experiment fixes this by keeping the receiver constant.
 
 ## Thesis implications
 
@@ -357,19 +310,17 @@ This is the key experimental limitation. The results reflect combined TX+RX hard
 | 4 | Keep DC offset in preprocessing (no mean subtraction) | Conservative, correct for general case |
 | 5 | Carry forward the same CNN architecture | Validated in this experiment |
 
----
-
 ## Repository structure
 
 ```
 rf-fingerprinting/
 |
-+-- README.md                          <- this document
++-- README.md                          (this document)
 |
 +-- notebooks/
-|   +-- rf_fingerprinting_master.ipynb <- data loading, AWGN, CNN training
-|   +-- swap_experiment_analysis.ipynb <- temporal split, DC offset, saliency
-|   +-- phase_analysis.ipynb           <- CFO measurement, feature investigation
+|   +-- rf_fingerprinting_master.ipynb (data loading, AWGN, CNN training)
+|   +-- swap_experiment_analysis.ipynb (temporal split, DC offset, saliency)
+|   +-- phase_analysis.ipynb           (CFO measurement, feature investigation)
 |
 +-- images/
 |   +-- 01_iq_time_domain.png
@@ -387,19 +338,15 @@ rf-fingerprinting/
     +-- rf_cnn_snr0dB.keras
 ```
 
----
-
 ## Technical notes
 
 **Why AveragePooling instead of MaxPooling?**
-MaxPooling keeps only the highest-amplitude feature in each window, which works well for image classification. For RF signals, subtle phase and timing patterns matter as much as amplitude peaks. AveragePooling preserves these by considering the full window rather than just the peak.
+MaxPooling keeps only the highest-amplitude feature in each window, which is a reasonable choice for image classification where sharp edges matter. For RF signals, subtle phase and timing patterns are just as important as amplitude peaks, and AveragePooling preserves these by taking the whole window into account.
 
 **Why GlobalAveragePooling1D instead of Flatten?**
-After three conv layers, the tensor is shape (128, 128). Flattening gives 16,384 features going into the Dense layer, about 4 million parameters in that connection alone. GlobalAveragePooling1D reduces this to 128 features, around 16K parameters. Same representational power, 250 times fewer weights to overfit.
+After three conv layers the tensor is shape (128, 128). Flattening that gives 16,384 features going into the Dense layer, which means roughly 4 million parameters in that one connection alone. GlobalAveragePooling1D averages across the time dimension first, reducing the input to 128 features and bringing the total parameter count down to around 16K. The representational power is the same, but there are 250 times fewer weights to overfit.
 
 **Why 0.0001 learning rate?**
-RF fingerprints are subtle. A large learning rate such as 0.001 causes the optimizer to overshoot the narrow loss minima where the hardware impairment features live. The slower learning rate was the fix that broke the initial 50% flatline.
-
----
+RF fingerprints are subtle, and a learning rate of 0.001 caused the optimiser to overshoot the narrow regions of the loss surface where the hardware impairment features sit. Dropping to 0.0001 was what finally broke the initial 50% accuracy flatline.
 
 Kristianstad University, DT339G VT26, Thesis Project, April 2025
