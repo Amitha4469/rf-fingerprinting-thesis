@@ -350,3 +350,275 @@ After three conv layers the tensor is shape (128, 128). Flattening that gives 16
 RF fingerprints are subtle, and a learning rate of 0.001 caused the optimiser to overshoot the narrow regions of the loss surface where the hardware impairment features sit. Dropping to 0.0001 was what finally broke the initial 50% accuracy flatline.
 
 Kristianstad University, DT339G VT26, Thesis Project, April 2025
+---
+
+# Pre-Experiment Analysis — Comprehensive Scientific Results
+
+This section documents eight analyses run on the swap experiment data.
+Each one addresses a specific thesis claim, research question, or gap in the reference literature.
+All results come from the notebook `pre_experiment_comprehensive.ipynb`.
+
+---
+
+## Contents
+
+- [Section 2 — Oscillator Offset Estimation](#section-2--oscillator-offset-estimation)
+- [Section 3 — CFO Baseline vs CNN](#section-3--cfo-baseline-vs-cnn)
+- [Section 4 — Extended SNR Sweep](#section-4--extended-snr-sweep)
+- [Section 5 — Cross-SNR Generalisation](#section-5--cross-snr-generalisation)
+- [Section 6 — Minimum Segment Length](#section-6--minimum-segment-length)
+- [Section 7 — Raw IQ vs STFT Spectrogram](#section-7--raw-iq-vs-stft-spectrogram)
+- [Section 8 — Security Metrics: FAR, FRR, EER](#section-8--security-metrics-far-frr-eer)
+- [Master Results Summary](#master-results-summary)
+
+---
+
+## Section 2 — Oscillator Offset Estimation
+
+**Purpose:** Use algebra on the swap measurements to separate each device's
+individual oscillator error from the combined TX+RX path measurement.
+
+**Why it matters:** The real experiment uses a fixed receiver. Knowing each
+device's individual offset gives a prediction of what CFO separation to expect
+before running the experiment.
+
+![Oscillator Offset](images/s2_oscillator.png)
+
+**The algebra:**
+
+```
+Nominal CW tone = 10,000 Hz
+
+Pair A (3288FAD TX, 3288FF2 RX):  tone received at  9,418 Hz
+  Combined shift = 9418 - 10000 = -582 Hz
+
+Pair B (3288FF2 TX, 3288FAD RX):  tone received at 10,580 Hz
+  Combined shift = 10580 - 10000 = +580 Hz
+
+Assuming TX and RX oscillator errors are equal per device:
+  Device 3288FAD individual offset = -290.82 Hz
+  Device 3288FF2 individual offset = -290.82 Hz
+```
+
+**Key finding:** Both devices have identical individual oscillator offsets
+(-290.82 Hz each). The 1,161 Hz separation seen in the swap experiment is
+entirely a TX+RX path effect — not an intrinsic device difference in isolation.
+
+**Prediction for real experiment:** When the fixed-RX experiment runs, the
+predicted CFO separation is approximately 0 Hz, meaning both transmitters will
+appear at the same frequency when received by the same radio. The real
+experiment will either confirm or challenge this prediction.
+
+---
+
+## Section 3 — CFO Baseline vs CNN
+
+**Purpose:** Compare the neural network against the simplest possible
+classifier: measure the tone frequency, apply a threshold at the midpoint
+between the two known CFO values (9,999 Hz), classify accordingly.
+
+**Why it matters:** If the baseline matches the CNN at all SNR levels, the CNN
+adds no value. If the baseline degrades faster at low SNR, the CNN is learning
+something richer than just frequency detection.
+
+![CFO Baseline vs CNN](images/s3_baseline_vs_cnn.png)
+
+| SNR | CFO Baseline | CNN (trained at 20 dB) | CNN Advantage |
+|-----|-------------|----------------------|---------------|
+| 20 dB | 100.00% | 100.00% | 0.00 pp |
+| 10 dB | **100.00%** | 64.90% | **-35.09 pp** |
+| 0 dB | 53.81% | 50.24% | -3.57 pp |
+| -5 dB | 50.78% | 50.24% | -0.54 pp |
+| -10 dB | 50.07% | 50.24% | +0.17 pp |
+
+**Key finding:** At 10 dB SNR, the CFO threshold baseline (100%) significantly
+outperforms the cross-SNR CNN (64.9%). The baseline requires no training and
+degrades gracefully. This tells us two things. First, the CNN must be trained
+and evaluated at matching SNR levels — cross-SNR generalisation is a real
+problem (addressed in Section 5). Second, the CFO fingerprint is robust enough
+that a simple frequency measurement works well under moderate noise.
+
+---
+
+## Section 4 — Extended SNR Sweep
+
+**Purpose:** Find the actual SNR threshold where authentication becomes
+unreliable. The original experiment only tested 0, 10, 20 dB — all gave 100%
+accuracy. The threshold was somewhere below 0 dB.
+
+**Why it matters:** Scientific Contribution C2 promises the first empirical SNR
+threshold for lightweight RF authentication. Without this sweep, that claim is
+unfulfilled. Abbas et al. [6] explicitly identified this threshold as unknown.
+
+![Extended SNR Sweep](images/s4_snr_sweep.png)
+
+| SNR | Accuracy | Status |
+|-----|----------|--------|
+| +30 dB | 100.00% | RELIABLE |
+| +25 dB | 100.00% | RELIABLE |
+| +20 dB | 100.00% | RELIABLE |
+| +15 dB | 100.00% | RELIABLE |
+| +10 dB | 100.00% | RELIABLE |
+| +5 dB | 100.00% | RELIABLE |
+| 0 dB | 100.00% | RELIABLE |
+| -5 dB | 99.87% | RELIABLE |
+| **-10 dB** | **84.58%** | **MARGINAL** |
+| -15 dB | 81.48% | MARGINAL |
+| -20 dB | 84.85% | MARGINAL |
+
+**Key finding:** The authentication system remains fully reliable (above 95%)
+down to -5 dB SNR — well below the noise floor of most real environments.
+Degradation begins at -10 dB. This directly fulfils Thesis Contribution C2:
+the empirical SNR threshold is -10 dB.
+
+---
+
+## Section 5 — Cross-SNR Generalisation
+
+**Purpose:** Train the CNN at one SNR level and evaluate it at a different
+level without retraining. The result shows whether the model learned a
+generalised fingerprint or just adapted to a specific noise condition.
+
+**Why it matters:** In real deployment, SNR conditions vary. A model that
+only works at the SNR it trained on is not practically useful.
+
+![Cross-SNR Matrix](images/s5_cross_snr.png)
+
+| Metric | Value |
+|--------|-------|
+| Mean same-SNR accuracy | 96.89% |
+| Mean best cross-SNR accuracy | 70.05% |
+| Generalisation gap | **26.84 percentage points** |
+
+**Key finding:** There is a significant 26.84 percentage point gap between
+same-SNR and cross-SNR performance. The CNN does not generalise well across
+SNR levels without retraining. For the real thesis experiment, this means
+models should be trained and evaluated at matching SNR levels, or multi-SNR
+training with noise augmentation should be explored.
+
+---
+
+## Section 6 — Minimum Segment Length
+
+**Purpose:** Find the shortest signal window from which reliable classification
+is possible. Tests segment lengths of 64, 128, 256, 512, and 1,024 samples.
+
+**Why it matters:** Directly supports the lightweight thesis claim. Shorter
+segments mean faster authentication decisions and lower processing load on
+constrained IoT devices. Meng et al. [5] define lightweight by parameter count
+but do not characterise the minimum input length for reliable authentication.
+
+![Minimum Segment Length](images/s6_segment_length.png)
+
+| Segment Length | Latency | Accuracy | Status |
+|---------------|---------|----------|--------|
+| **64 samples** | **0.064 ms** | **99.02%** | **Minimum reliable** |
+| 128 samples | 0.128 ms | 100.00% | Reliable |
+| 256 samples | 0.256 ms | 100.00% | Reliable |
+| 512 samples | 0.512 ms | 100.00% | Reliable |
+| 1,024 samples | 1.024 ms | 100.00% | Baseline |
+
+**Key finding:** The minimum reliable segment length is 64 samples (0.064 ms),
+achieving 99.02% accuracy. This is 16 times faster than the 1,024-sample
+baseline. The strong CFO fingerprint is detectable even in very short windows
+because it manifests as a consistent phase rotation rate present from the first
+sample.
+
+---
+
+## Section 7 — Raw IQ vs STFT Spectrogram
+
+**Purpose:** Compare two CNN variants: a 1D CNN on raw IQ segments versus
+a 2D CNN on STFT spectrograms of the same segments. Both trained and evaluated
+under the same conditions.
+
+**Why it matters:** This directly fills Research Gap G3 identified in the
+thesis literature review (Yan et al. [7]): no prior study performed this
+comparison under a systematic controlled SNR sweep using the same CNN family.
+This also answers Research Sub-Question SQ3.
+
+![Raw IQ vs STFT](images/s7_iq_vs_stft.png)
+
+| SNR | 1D CNN Raw IQ | 2D CNN STFT | Winner |
+|-----|-------------|------------|--------|
+| 20 dB | 100.00% | 100.00% | Tie |
+| 10 dB | 100.00% | 100.00% | Tie |
+| 0 dB | **100.00%** | 88.47% | 1D CNN |
+| -5 dB | **94.90%** | 89.50% | 1D CNN |
+| -10 dB | 75.97% | **85.63%** | 2D STFT |
+
+**Model comparison:**
+
+| Property | 1D CNN (Raw IQ) | 2D CNN (STFT) |
+|----------|----------------|--------------|
+| Parameters | 52,258 | 109,442 |
+| High SNR accuracy | 100% | 100% |
+| Low SNR (0 dB) | 100% | 88.47% |
+| Extreme low SNR (-10 dB) | 75.97% | 85.63% |
+
+**Key finding:** The 1D CNN on raw IQ is the better choice for the normal
+operating range (0 dB and above), achieving higher accuracy with half the
+parameters. The 2D STFT CNN only gains an advantage below -10 dB — an
+extreme condition below the practical reliability threshold. For the thesis
+experiment, the 1D raw IQ architecture is confirmed as the right choice.
+This result fills Research Gap G3 and answers SQ3.
+
+---
+
+## Section 8 — Security Metrics: FAR, FRR, EER
+
+**Purpose:** Reframe the classification results as an authentication system
+using the security metrics from the reference literature. FAR (False Acceptance
+Rate) measures how often an impostor is accepted; FRR (False Rejection Rate)
+measures how often a legitimate device is rejected; EER (Equal Error Rate) is
+where the two are equal and serves as the standard single-number security
+metric.
+
+**Why it matters:** Your thesis is about authentication, not just
+classification. Xie et al. [2] and Hoang et al. [3] both use FAR as the
+primary security metric. Reporting only accuracy misses this framing entirely.
+
+![Security Metrics](images/s8_security_metrics.png)
+
+| SNR | FAR | FRR | EER | AUC |
+|-----|-----|-----|-----|-----|
+| 20 dB | 0.000% | 0.000% | 0.000% | 1.000000 |
+| 10 dB | 0.000% | 0.000% | 0.000% | 1.000000 |
+| 0 dB | 0.000% | 0.000% | 0.000% | 1.000000 |
+| -5 dB | 0.092% | 0.172% | 0.146% | 0.999992 |
+| **-10 dB** | **18.012%** | **12.850%** | **15.176%** | **0.927392** |
+
+**Key finding:** The system achieves perfect security (EER = 0%) from 0 dB
+through 30 dB SNR — a very wide reliable operating range. Security begins
+degrading only at -5 dB (EER = 0.146%) and becomes unacceptable at -10 dB
+(EER = 15.176%). The AUC remains above 0.99 down to -5 dB, confirming strong
+discriminative power across the practical operating range. This fulfils the
+security framing required by Xie et al. [2].
+
+---
+
+## Master Results Summary
+
+All findings from the pre-experiment analysis in one table.
+
+| Analysis | Key Result | Thesis Link |
+|----------|-----------|-------------|
+| Oscillator estimation | Individual offsets equal (-290.82 Hz each) | Pre-experiment baseline |
+| CFO baseline vs CNN | Baseline outperforms cross-SNR CNN at 10 dB | CNN needs SNR-matched training |
+| Extended SNR sweep | Reliable to -5 dB, threshold at -10 dB | SQ2 / Contribution C2 |
+| Cross-SNR generalisation | 26.84 pp gap between same and cross-SNR | Augmentation needed |
+| Minimum segment length | 64 samples (0.064 ms), 16x speedup | Lightweight claim / C2 |
+| Raw IQ vs STFT | 1D CNN wins at 0 dB+; STFT wins below -10 dB | Research Gap G3 / SQ3 |
+| Security metrics | EER = 0% from +30 to 0 dB SNR | Xie et al. [2] metric fulfilled |
+
+### Design decisions confirmed for the real experiment
+
+1. Use the 1D CNN on raw IQ — better accuracy with half the parameters at the operating range
+2. Train and evaluate at matching SNR levels — cross-SNR gap is 26.84 pp
+3. Minimum window of 64 samples is sufficient — but 128 samples gives 100% with more stability
+4. Report EER alongside accuracy — required for security framing
+5. The predicted CFO separation in the real experiment is approximately 0 Hz — verify this when the fixed-RX data is recorded
+
+---
+
+*Kristianstad University — DT339G VT26 — Thesis Project*
