@@ -310,6 +310,15 @@ This is the key experimental limitation. The results reflect combined TX+RX hard
 | 4 | Keep DC offset in preprocessing (no mean subtraction) | Conservative, correct for general case |
 | 5 | Carry forward the same CNN architecture | Validated in this experiment |
 
+## Notebooks
+
+| Notebook | Description | Run |
+|---|---|---|
+| [rf_fingerprinting_master.ipynb](notebooks/rf_fingerprinting_master.ipynb) | Data loading, AWGN noise injection, and 1D-CNN training at 0/10/20 dB SNR | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Amitha4469/rf-fingerprinting-thesis/blob/main/notebooks/rf_fingerprinting_master.ipynb) |
+| [swap_experiment_analysis.ipynb](notebooks/swap_experiment_analysis.ipynb) | Temporal holdout evaluation, DC offset analysis, and CNN saliency maps | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Amitha4469/rf-fingerprinting-thesis/blob/main/notebooks/swap_experiment_analysis.ipynb) |
+| [phase_analysis.ipynb](notebooks/phase_analysis.ipynb) | CFO measurement, unwrapped phase plots, and hardware feature investigation | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Amitha4469/rf-fingerprinting-thesis/blob/main/notebooks/phase_analysis.ipynb) |
+| [pre_experiment_comprehensive.ipynb](notebooks/pre_experiment_comprehensive.ipynb) | Eight analyses: oscillator estimation, extended SNR sweep, cross-SNR generalisation, raw IQ vs STFT, and security metrics (FAR/FRR/EER) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Amitha4469/rf-fingerprinting-thesis/blob/main/notebooks/pre_experiment_comprehensive.ipynb) |
+
 ## Repository structure
 
 ```
