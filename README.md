@@ -296,11 +296,11 @@ This is the key experimental limitation. The results reflect combined TX+RX hard
 
 ## Thesis implications
 
-### For the thesis paragraph (Results and Discussion chapter)
+Phase analysis of the swap experiment showed that the primary discriminating feature was Carrier Frequency Offset (CFO). The two hardware configurations produced received CW tones at 9,418 Hz and 10,580 Hz in the baseband — a separation of 1,161 Hz (std dev: 0.67 Hz across 200 independent segments). DC offset, commonly cited as the primary RF fingerprint in the literature, showed negligible difference between devices (delta |DC| = 0.000001). The CNN therefore learned oscillator-specific frequency deviation rather than amplitude-domain impairments.
 
-"Phase analysis of the swap experiment revealed that the primary discriminating feature was Carrier Frequency Offset (CFO). The two hardware configurations produced received CW tones at 9,418 Hz and 10,580 Hz respectively in the baseband, a separation of 1,161 Hz (std dev: 0.67 Hz across 200 independent segments). DC offset, commonly cited as the primary RF fingerprint in the literature, showed negligible difference between devices (delta |DC| = 0.000001). This finding demonstrates that the CNN implicitly learned oscillator-specific frequency deviation rather than amplitude-domain impairments. Since both transmitter and receiver changed between classes in this preliminary experiment, the measured CFO reflects the combined hardware offset of each RF chain pair. The definitive thesis experiment isolates transmitter-only fingerprints using a fixed receiver."
+Since both transmitter and receiver changed between classes in this preliminary experiment, the measured CFO reflects the combined hardware offset of each RF chain pair. The definitive thesis experiment isolates transmitter-only fingerprints by keeping the receiver fixed throughout all captures.
 
-### Action items for the real experiment
+### Design decisions for the real experiment
 
 | # | Action | Reason |
 |---|---|---|
@@ -349,14 +349,13 @@ rf-fingerprinting/
 
 ## Technical notes
 
-**Why AveragePooling instead of MaxPooling?**
-MaxPooling keeps only the highest-amplitude feature in each window, which is a reasonable choice for image classification where sharp edges matter. For RF signals, subtle phase and timing patterns are just as important as amplitude peaks, and AveragePooling preserves these by taking the whole window into account.
+Several design decisions in the CNN architecture are worth explaining.
 
-**Why GlobalAveragePooling1D instead of Flatten?**
-After three conv layers the tensor is shape (128, 128). Flattening that gives 16,384 features going into the Dense layer, which means roughly 4 million parameters in that one connection alone. GlobalAveragePooling1D averages across the time dimension first, reducing the input to 128 features and bringing the total parameter count down to around 16K. The representational power is the same, but there are 250 times fewer weights to overfit.
+AveragePooling was chosen over MaxPooling because MaxPooling retains only the highest-amplitude feature in each window — suitable for image classification but not for RF signals, where subtle phase and timing patterns carry equal discriminative weight. AveragePooling preserves the full window context.
 
-**Why 0.0001 learning rate?**
-RF fingerprints are subtle, and a learning rate of 0.001 caused the optimiser to overshoot the narrow regions of the loss surface where the hardware impairment features sit. Dropping to 0.0001 was what finally broke the initial 50% accuracy flatline.
+GlobalAveragePooling1D was used in place of Flatten to keep the model lightweight. After three convolutional layers the tensor has shape (128, 128); flattening this directly would produce roughly 4 million parameters in a single Dense connection. GlobalAveragePooling1D collapses the time dimension first, reducing the input to 128 features and bringing the total parameter count to around 16K with no loss in representational power.
+
+A learning rate of 0.0001 was selected after observing that 0.001 caused the optimiser to overshoot the narrow loss regions where RF hardware impairment features reside. The lower rate broke the initial 50% accuracy flatline and allowed the model to converge cleanly.
 
 Kristianstad University, DT339G VT26, Thesis Project, April 2025
 ---
