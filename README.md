@@ -44,11 +44,11 @@ We then trained a lightweight 1D-CNN on those recordings and analysed what it le
 
 ## Hardware setup
 
-Both radios are USRP B200 devices, physically identical units from the same manufacturer. They were placed 1 metre apart in a normal indoor environment, transmitting over-the-air with no cables.
+Both radios are USRP B200 devices, physically identical units from the same manufacturer. They were placed less than 10 cm apart in a normal indoor environment, transmitting over-the-air with no cables.
 
 ```
 [USRP B200 TX]  ---air---  [USRP B200 RX]
-  0 dB TX gain   1 metre    30 dB RX gain
+  0 dB TX gain   less than 10 cm    30 dB RX gain
   10 kHz CW tone  OTA       1 MHz sample rate
 ```
 
@@ -58,7 +58,7 @@ Both radios are USRP B200 devices, physically identical units from the same manu
 | Sample rate | 1,000,000 samples/sec | Standard for 1 MHz bandwidth |
 | TX Gain | 0 dB | Prevents receiver saturation at 1 m distance |
 | RX Gain | 30 dB | Keeps received signal in usable amplitude range |
-| Distance | 1 metre, fixed, line-of-sight | Consistent channel for both recordings |
+| Distance | less than 10 cm, fixed, line-of-sight | Consistent channel for both recordings |
 | Transient skip | First 1,000,000 samples dropped | Removes hardware power-on spike |
 | Segment size | 1,024 samples per CNN input window | ~1 ms of signal |
 
